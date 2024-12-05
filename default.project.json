@@ -2,11 +2,9 @@
     "name": "roblox-benchmarks",
     "tree": {
         "$className": "DataModel",
-        "StarterPlayer": {
-            "StarterPlayerScripts": {
-                "Client": {
-                    "$path": "Source"
-                }
+        "ServerScriptService": {
+            "Server": {
+                "$path": "Source"
             }
         }
     }
