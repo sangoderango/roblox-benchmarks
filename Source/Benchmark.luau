@@ -7,6 +7,11 @@ local SECOND_TO_MICROSECOND = 1_000_000
 
 type Procedure = () -> ()
 
+type Result = {
+    Label: string,
+    Time: number,
+}
+
 export type Config = {
     Title: string,
     Trials: number?,
@@ -20,12 +25,34 @@ local function TryCall(procedure: Procedure?)
     end
 end
 
+local function Measure(procedure: Procedure)
+    local start_time = os.clock()
+
+    procedure()
+
+    return os.clock() - start_time
+end
+
+local function DisplayResults(title: string, results: { Result })
+    table.sort(results, function(first, second)
+        return first.Time < second.Time
+    end)
+
+    local output = title
+
+    for place, result in next, results do
+        output ..= `\n#{place}: "{result.Label}" took {if result.Time < 1 then "<1" else result.Time // 1} μs!`
+    end
+
+    print("\n\n" .. output .. "\n\n")
+end
+
 local function Benchmark(config: Config)
     local trials = config.Trials or DEFAULT_TRIALS
 
     assert(trials > 0 and trials % 1 == 0, "Trials must be a non-zero positive integer")
 
-    local output = config.Title
+    local results: { Result } = {}
 
     for label, job in next, config.Jobs do
         local times = table.create(trials)
@@ -33,23 +60,19 @@ local function Benchmark(config: Config)
         for trial = 1, trials do
             TryCall(config.Prelude)
 
-            local start_time = os.clock()
-
-            job()
-
-            times[trial] = os.clock() - start_time
+            times[trial] = Measure(job)
         end
 
         table.sort(times)
 
-        local median = times[trials // 2] * SECOND_TO_MICROSECOND
+        local median_time = times[trials // 2] * SECOND_TO_MICROSECOND
 
-        output ..= `\n"{label}" took {if median < 1 then "<1" else median // 1} μs!`
+        table.insert(results, { Label = label, Time = median_time })
 
         task.wait()
     end
 
-    print("\n\n" .. output .. "\n\n")
+    DisplayResults(config.Title, results)
 end
 
 return Benchmark
