@@ -1,7 +1,8 @@
 --!strict
 --!optimize 2
+--!native
 
-local DEFAULT_TRIALS = 10
+local MEDIAN_PERCENTILE = 0.5
 
 local SECOND_TO_MICROSECOND = 1_000_000
 
@@ -14,23 +15,38 @@ type Result = {
 
 export type Config = {
     Title: string,
-    Trials: number?,
-    Prelude: Procedure?,
+    Trials: number,
+    Prelude: Procedure,
+    Cleanup: Procedure,
     Jobs: { [string]: Procedure },
 }
 
-local function TryCall(procedure: Procedure?)
-    if procedure then
-        procedure()
-    end
-end
-
-local function Measure(procedure: Procedure)
+local function Measure(procedure: Procedure): number
     local start_time = os.clock()
 
     procedure()
 
     return os.clock() - start_time
+end
+
+local function Lerp(start: number, goal: number, alpha: number): number
+    assert(alpha >= 0 and alpha <= 1)
+
+    return start + (goal - start) * alpha
+end
+
+local function CalculatePercentile(times: { number }, percentile: number): number
+    assert(percentile >= 0 and percentile <= 1)
+
+    if #times <= 1 then
+        return times[1] or 0
+    end
+
+    table.sort(times)
+
+    local rank = percentile * (#times - 1) + 1
+
+    return Lerp(times[math.floor(rank)], times[math.ceil(rank)], rank % 1)
 end
 
 local function DisplayResults(title: string, results: { Result })
@@ -41,33 +57,36 @@ local function DisplayResults(title: string, results: { Result })
     local output = title
 
     for place, result in next, results do
-        output ..= `\n#{place}: "{result.Label}" took {if result.Time < 1 then "<1" else result.Time // 1} μs!`
+        local time = math.floor(result.Time * SECOND_TO_MICROSECOND)
+
+        output ..= `\n#{place}: "{result.Label}" took {if time < 1 then "<1" else time} μs!`
     end
 
     print("\n\n" .. output .. "\n\n")
 end
 
 local function Benchmark(config: Config)
-    local trials = config.Trials or DEFAULT_TRIALS
+    assert(config.Trials >= 1 and config.Trials % 1 == 0, "Trials must be a non-zero positive integer")
 
-    assert(trials > 0 and trials % 1 == 0, "Trials must be a non-zero positive integer")
-
-    local results: { Result } = {}
+    local results, index = {}, 1
 
     for label, job in next, config.Jobs do
-        local times = table.create(trials)
+        local times = table.create(config.Trials)
 
-        for trial = 1, trials do
-            TryCall(config.Prelude)
+        for iteration = 1, config.Trials do
+            config.Prelude()
 
-            times[trial] = Measure(job)
+            times[iteration] = Measure(job)
+
+            config.Cleanup()
         end
 
-        table.sort(times)
+        results[index] = {
+            Label = label,
+            Time = CalculatePercentile(times, MEDIAN_PERCENTILE),
+        }
 
-        local median_time = times[trials // 2] * SECOND_TO_MICROSECOND
-
-        table.insert(results, { Label = label, Time = median_time })
+        index += 1
 
         task.wait()
     end

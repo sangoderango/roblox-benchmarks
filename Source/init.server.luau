@@ -1,12 +1,16 @@
 --!strict
 --!optimize 2
+--!native
 
 local Benchmark = require(script.Benchmark)
 
-local ArrayIteration = require(script.Benchmarks.ArrayIteration)
-local RandomIntegers = require(script.Benchmarks.RandomIntegers)
-local FillArray = require(script.Benchmarks.FillArray)
+local Benchmarks = script.Benchmarks
+local LargeArrayIteration = require(Benchmarks.LargeArrayIteration)
+local FillLargeArray = require(Benchmarks.FillLargeArray)
+local RandomIntegers = require(Benchmarks.RandomIntegers)
+local RoundingPositives = require(Benchmarks.RoundingPositives)
+local SelfAddition = require(Benchmarks.SelfAddition)
 
 task.wait(3)
 
-Benchmark(ArrayIteration)
+Benchmark(SelfAddition)
